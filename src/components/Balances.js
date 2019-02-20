@@ -9,8 +9,8 @@ import BigNumber from "bignumber.js"
 
 const tokens = [
     "PPY",
-    "RUDEX.SCR",
     "RUDEX.WLS",
+    "RUDEX.SMOKE",
     "RUDEX.STEEM",
     "RUDEX.SBD",
     "RUDEX.GOLOS",
@@ -20,7 +20,8 @@ const tokens = [
     "RUDEX.EOS",
     "RUDEX.KRM",
     "RUDEX.GRC",
-    "RUDEX.VIZ",
+    "RUDEX.SCR",
+    // "RUDEX.VIZ",
     // "RUDEX.TT",
     // "RUDEX.PPC",
     // "RUDEX.DGB",
