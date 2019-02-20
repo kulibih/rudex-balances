@@ -10,19 +10,22 @@ import Balances from "./components/Balances";
 
 import {Layout} from 'antd';
 
-const {Content, Footer} = Layout;
+const {Content, Header, Footer} = Layout;
 
 class App extends Component {
     render() {
         return (
             <Router>
-                <Layout className="layout" style={{height:"100vh"}}>
-                    <Content>
+                <Layout className="layout">
+                    <Header>
+                        <h1 className="header">RuDEX Balances</h1>
+                    </Header>
+                    <Content style={{padding: "10px"}}>
                         <div>
                             <Route exact path="/" component={Balances}/>
                         </div>
                     </Content>
-                    <Footer style={{textAlign: 'center'}}>
+                    <Footer style={{textAlign: 'center', position: "sticky", bottom: "0"}}>
                         RuDEX © 2019
                     </Footer>
                 </Layout>
