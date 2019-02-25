@@ -73,7 +73,7 @@ class Balances extends Component {
         this.setState({data});
 
         Apis.instance("wss://france.bitshares.apasia.tech/ws", true).init_promise.then(() => {
-            ChainStore.init().then(() => {
+            ChainStore.init(false).then(() => {
                 tokens.forEach(token => {
                     FetchChain("getAsset", token).then(asset => {
                         FetchChain("getAccount", asset.get("issuer")).then(issuer => {
