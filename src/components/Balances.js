@@ -72,7 +72,7 @@ class Balances extends Component {
 
         this.setState({data});
 
-        Apis.instance("wss://api.bts.blckchnd.com", true).init_promise.then(() => {
+        Apis.instance("wss://france.bitshares.apasia.tech/ws", true).init_promise.then(() => {
             ChainStore.init().then(() => {
                 tokens.forEach(token => {
                     FetchChain("getAsset", token).then(asset => {
