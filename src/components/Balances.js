@@ -237,7 +237,7 @@ class Balances extends Component {
                             let priceClassName = null;
                             if (price.isLessThan(warnMinAmount)) priceClassName = "warn";
 
-                            priceLabel = <span className={priceClassName}>(${price.toFixed(4)})</span>;
+                            priceLabel = <span className={priceClassName}><small>(${price.toFixed(3)})</small></span>;
                         } else {
                             priceLabel = <span>(?)</span>;
                         }
@@ -265,7 +265,7 @@ class Balances extends Component {
                             let priceClassName = null;
                             if (price.isGreaterThanOrEqualTo(okAccAmount)) priceClassName = "success";
 
-                            priceLabel = <span className={priceClassName}>(${price.toFixed(2)})</span>;
+                            priceLabel = <span className={priceClassName}><small>(${price.toFixed(0)})</small></span>;
                         } else {
                             priceLabel = <span>(?)</span>;
                         }
@@ -287,9 +287,9 @@ class Balances extends Component {
                         let price = prices[val.asset];
                         let priceLabel = null;
                         if (price) {
-                            price = BigNumber(price).multipliedBy(val.amount);
+                            price = BigNumber(price).multipliedBy(val.amount).dividedBy(1000);
 
-                            priceLabel = <span>(${price.toFixed(2)})</span>;
+                            priceLabel = <span><small>(${price.toFixed(0)}K)</small></span>;
                         } else {
                             priceLabel = <span>(?)</span>;
                         }
