@@ -7,32 +7,18 @@ import {Apis} from "bitsharesjs-ws";
 import {ChainStore, FetchChain} from "bitsharesjs";
 import BigNumber from "bignumber.js"
 
-const tokens = [
-    "PPY",
-    "RUDEX.WLS",
-    "RUDEX.SMOKE",
-    "RUDEX.STEEM",
-    "RUDEX.SBD",
-    "RUDEX.GOLOS",
-    "RUDEX.GBG",
-    "RUDEX.BTC",
-    "RUDEX.ETH",
-    "RUDEX.EOS",
-    "RUDEX.KRM",
-    "RUDEX.GRC",
-    "RUDEX.SCR",
-    // "RUDEX.VIZ",
-    // "RUDEX.TT",
-    // "RUDEX.PPC",
-    // "RUDEX.DGB",
-    // "RUDEX.MUSE",
-];
+import axios from "axios";
+
+const gatewayApi = "https://gateway.rudex.org/api/v0_3/coins";
+const bitsharesApi = "wss://france.bitshares.apasia.tech/ws";
+
 
 const coreToken = {
     id: "1.3.0",
     symbol: "BTS",
     precision: 5
 };
+const warnMinAmount = BigNumber(1);
 const warnAccountBalance = BigNumber(50);
 const warnPoolBalance = BigNumber(50);
 const okAccountBalance = BigNumber(100);
@@ -46,6 +32,7 @@ class Balances extends Component {
 
         this.state = {
             data: [],
+            prices: {},
             loading: false
         }
     }
@@ -57,34 +44,84 @@ class Balances extends Component {
     fetch() {
         //this.setState({ loading: true });
 
+        // Make a request for a user with a given ID
+        axios.get(gatewayApi)
+            .then((response) => {
+
+                let tokens = [];
+                response.data.forEach(token => {
+                    tokens.push({
+                        name: token.symbol,
+                        minAmount: token.minAmount,
+                        account: token.issuer,
+                    });
+                });
+
+                this.fetchTokens(tokens);
+                this.fetchPrices(tokens);
+
+            })
+            .catch(function (error) {
+                // handle error
+                console.log(error);
+            });
+    }
+
+    fetchPrices(tokens) {
+        tokens.forEach(token => {
+
+            axios.get(`https://bitsharescan.com/api/asset/${token.name}/markets?currency=USD&page=1&perPage=10&sort=volume.base&sortDirection=-`)
+                .then((response) => {
+
+                    if (response.data.markets) {
+                        let price = response.data.markets[0].price.USD;
+                        let x = this.state.prices;
+                        x[token.name] = price;
+                        this.setState({
+                            prices: x
+                        });
+                    }
+
+                })
+                .catch(function (error) {
+                    // handle error
+                    console.log(error);
+                });
+        });
+
+    }
+
+
+    fetchTokens(tokens) {
         let data = this.state.data;
 
         tokens.forEach(token => {
             data.push({
-                token,
-                account: null,
+                token: token.name,
+                account: token.account,
                 balance: null,
                 supply: null,
                 feePool: null,
-                accumulatedFees: null
+                accumulatedFees: null,
+                minAmount: null
             });
         });
 
         this.setState({data});
 
-        Apis.instance("wss://france.bitshares.apasia.tech/ws", true).init_promise.then(() => {
+        Apis.instance(bitsharesApi, true).init_promise.then(() => {
             ChainStore.init(false).then(() => {
                 tokens.forEach(token => {
-                    FetchChain("getAsset", token).then(asset => {
-                        FetchChain("getAccount", asset.get("issuer")).then(issuer => {
-                            FetchChain("getObject", issuer.getIn(["balances", coreToken.id])).then(balance => {
+                    FetchChain("getAsset", token.name).then(asset => {
+                        FetchChain("getAccount", token.account).then(account => {
+                            FetchChain("getObject", account.getIn(["balances", coreToken.id])).then(balance => {
                                 let data = this.state.data;
-                                let x = data.find(i => i.token === token);
+                                let x = data.find(i => i.token === token.name);
 
                                 let amount = BigNumber(balance.get("balance")).shiftedBy(-coreToken.precision);
                                 let asset = coreToken.symbol;
 
-                                x.account = issuer.get("name");
+                                x.account = account.get("name");
                                 x.balance = {amount, asset};
                                 this.setState({data});
                             });
@@ -92,7 +129,7 @@ class Balances extends Component {
 
                         FetchChain("getObject", asset.get("dynamic_asset_data_id")).then(dynAssetData => {
                             let data = this.state.data;
-                            let x = data.find(i => i.token === token);
+                            let x = data.find(i => i.token === token.name);
                             x.supply = {
                                 amount: BigNumber(dynAssetData.get("current_supply")).shiftedBy(-asset.get("precision")),
                                 asset: asset.get("symbol")
@@ -105,6 +142,12 @@ class Balances extends Component {
                                 amount: BigNumber(dynAssetData.get("fee_pool")).shiftedBy(-coreToken.precision),
                                 asset: coreToken.symbol
                             };
+
+                            // minamount
+                            x.minAmount = {
+                                amount: BigNumber(token.minAmount).shiftedBy(-asset.get("precision")),
+                                asset: asset.get("symbol")
+                            };
                             this.setState({data});
                         });
                     });
@@ -115,7 +158,7 @@ class Balances extends Component {
 
     render() {
 
-        const {data, loading} = this.state;
+        const {data, prices, loading} = this.state;
 
         const columns = [
             {
@@ -161,7 +204,7 @@ class Balances extends Component {
                     }
                 }
             }, {
-                title: 'Pool (BTS)',
+                title: 'Fee Pool (BTS)',
                 dataIndex: 'feePool',
                 key: 'feePool',
                 render: (val, record, index) => {
@@ -175,6 +218,35 @@ class Balances extends Component {
                                 amount={val.amount}
                                 asset={val.asset}
                             />
+                        </span>;
+                    }
+                }
+            }, {
+                title: 'Min Deposit',
+                dataIndex: 'minAmount',
+                key: 'minAmount',
+                render: (val, record, index) => {
+                    if (val) {
+                        let className = null;
+
+                        let price = prices[val.asset];
+                        let priceLabel = null;
+                        if (price) {
+                            price = BigNumber(price).multipliedBy(val.amount);
+
+                            let priceClassName = null;
+                            if (price.isLessThan(warnMinAmount)) priceClassName = "warn";
+
+                            priceLabel = <span className={priceClassName}>(${price.toFixed(4)})</span>;
+                        } else {
+                            priceLabel = <span>(?)</span>;
+                        }
+
+                        return <span className={className}>
+                            <Asset
+                                amount={val.amount}
+                                asset={val.asset}
+                            /> {priceLabel}
                         </span>;
                     }
                 }
