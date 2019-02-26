@@ -19,6 +19,7 @@ const coreToken = {
     precision: 5
 };
 const warnMinAmount = BigNumber(1);
+const okAccAmount = BigNumber(100);
 const warnAccountBalance = BigNumber(50);
 const warnPoolBalance = BigNumber(50);
 const okAccountBalance = BigNumber(100);
@@ -227,7 +228,6 @@ class Balances extends Component {
                 key: 'minAmount',
                 render: (val, record, index) => {
                     if (val) {
-                        let className = null;
 
                         let price = prices[val.asset];
                         let priceLabel = null;
@@ -242,6 +242,7 @@ class Balances extends Component {
                             priceLabel = <span>(?)</span>;
                         }
 
+                        let className = null;
                         return <span className={className}>
                             <Asset
                                 amount={val.amount}
@@ -256,11 +257,24 @@ class Balances extends Component {
                 key: 'accumulatedFees',
                 render: (val, record, index) => {
                     if (val) {
+                        let price = prices[val.asset];
+                        let priceLabel = null;
+                        if (price) {
+                            price = BigNumber(price).multipliedBy(val.amount);
+
+                            let priceClassName = null;
+                            if (price.isGreaterThanOrEqualTo(okAccAmount)) priceClassName = "success";
+
+                            priceLabel = <span className={priceClassName}>(${price.toFixed(2)})</span>;
+                        } else {
+                            priceLabel = <span>(?)</span>;
+                        }
+
                         return <span>
                             <Asset
                                 amount={val.amount}
                                 asset={val.asset}
-                            />
+                            /> {priceLabel}
                         </span>;
                     }
                 }
@@ -270,11 +284,21 @@ class Balances extends Component {
                 key: 'supply',
                 render: (val, record, index) => {
                     if (val) {
+                        let price = prices[val.asset];
+                        let priceLabel = null;
+                        if (price) {
+                            price = BigNumber(price).multipliedBy(val.amount);
+
+                            priceLabel = <span>(${price.toFixed(2)})</span>;
+                        } else {
+                            priceLabel = <span>(?)</span>;
+                        }
+
                         return <span>
                             <Asset
                                 amount={val.amount}
                                 asset={val.asset}
-                            />
+                            /> {priceLabel}
                         </span>;
                     }
                 }
