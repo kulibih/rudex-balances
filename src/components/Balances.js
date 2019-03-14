@@ -10,7 +10,7 @@ import BigNumber from "bignumber.js"
 import axios from "axios";
 
 const gatewayApi = "https://gateway.rudex.org/api/v0_3/coins";
-const bitsharesApi = "wss://france.bitshares.apasia.tech/ws";
+const bitsharesApi = "wss://btsfullnode.bangzi.info/ws";
 
 
 const coreToken = {
