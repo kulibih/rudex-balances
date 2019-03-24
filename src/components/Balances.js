@@ -10,20 +10,22 @@ import BigNumber from "bignumber.js"
 import axios from "axios";
 
 const gatewayApi = "https://gateway.rudex.org/api/v0_3/coins";
-const bitsharesApi = "wss://btsfullnode.bangzi.info/ws";
-
+const configUrl = "https://config.blckchnd.com/balances.json?"+Date.now();
 
 const coreToken = {
     id: "1.3.0",
     symbol: "BTS",
     precision: 5
 };
-const warnMinAmount = BigNumber(1);
-const okAccAmount = BigNumber(100);
-const warnAccountBalance = BigNumber(50);
-const warnPoolBalance = BigNumber(50);
-const okAccountBalance = BigNumber(100);
-const okPoolBalance = BigNumber(100);
+
+let bitsharesApi = "wss://btsfullnode.bangzi.info/ws";
+let monitor = [];
+let warnMinAmount = BigNumber(1);
+let okAccumulatedFees = BigNumber(100);
+let warnAccountBalance = BigNumber(50);
+let warnPoolBalance = BigNumber(50);
+let okAccountBalance = BigNumber(100);
+let okPoolBalance = BigNumber(100);
 
 
 class Balances extends Component {
@@ -33,13 +35,49 @@ class Balances extends Component {
 
         this.state = {
             data: [],
+            data2: [],
             prices: {},
             loading: false
         }
     }
 
     componentDidMount() {
-        this.fetch();
+        this.start();
+    }
+
+    start() {
+        axios.get(configUrl)
+            .then((response) => {
+                let config = response.data;
+
+                bitsharesApi = config.bitshares;
+
+
+                if (config.gateway.warnMinAmount)
+                    warnMinAmount = BigNumber(config.gateway.warnMinAmount);
+                if (config.gateway.okAccumulatedFees)
+                    okAccumulatedFees = BigNumber(config.gateway.okAccumulatedFees);
+                if (config.gateway.warnAccountBalance)
+                    warnAccountBalance = BigNumber(config.gateway.warnAccountBalance);
+                if (config.gateway.warnPoolBalance)
+                    warnPoolBalance = BigNumber(config.gateway.warnPoolBalance);
+                if (config.gateway.okAccountBalance)
+                    okAccountBalance = BigNumber(config.gateway.okAccountBalance);
+                if (config.gateway.okPoolBalance)
+                    okPoolBalance = BigNumber(config.gateway.okPoolBalance);
+
+                config.accounts.forEach(account => {
+                    monitor.push(account);
+                });
+
+                Apis.instance(bitsharesApi, true).init_promise.then(() => {
+                    ChainStore.init(false).then(() => {
+                        this.fetch();
+                        this.fetchData2();
+                    })
+                });
+            });
+
     }
 
     fetch() {
@@ -68,6 +106,38 @@ class Balances extends Component {
             });
     }
 
+    fetchData2() {
+        let data2 = this.state.data2;
+
+        monitor.forEach(item => {
+            data2.push({
+                id: (item[0] + item[1]),
+                account: item[0],
+                token: item[1],
+                balance: null,
+                min: item[2]
+            });
+        });
+
+        this.setState({data2});
+
+        data2.forEach(item => {
+            FetchChain("getAsset", item.token).then(asset => {
+                FetchChain("getAccount", item.account).then(account => {
+                    FetchChain("getObject", account.getIn(["balances", asset.get("id")])).then(balance => {
+                        let data2 = this.state.data2;
+                        let x = data2.find(i => i.id === item.id);
+
+                        let amount = BigNumber(balance.get("balance")).shiftedBy(-asset.get("precision"));
+
+                        x.balance = {amount, asset: item.token};
+                        this.setState({data2});
+                    });
+                });
+            });
+        });
+    }
+
     fetchPrices(tokens) {
         tokens.forEach(token => {
 
@@ -92,7 +162,6 @@ class Balances extends Component {
 
     }
 
-
     fetchTokens(tokens) {
         let data = this.state.data;
 
@@ -110,48 +179,45 @@ class Balances extends Component {
 
         this.setState({data});
 
-        Apis.instance(bitsharesApi, true).init_promise.then(() => {
-            ChainStore.init(false).then(() => {
-                tokens.forEach(token => {
-                    FetchChain("getAsset", token.name).then(asset => {
-                        FetchChain("getAccount", token.account).then(account => {
-                            FetchChain("getObject", account.getIn(["balances", coreToken.id])).then(balance => {
-                                let data = this.state.data;
-                                let x = data.find(i => i.token === token.name);
 
-                                let amount = BigNumber(balance.get("balance")).shiftedBy(-coreToken.precision);
-                                let asset = coreToken.symbol;
+        tokens.forEach(token => {
+            FetchChain("getAsset", token.name).then(asset => {
+                FetchChain("getAccount", token.account).then(account => {
+                    FetchChain("getObject", account.getIn(["balances", coreToken.id])).then(balance => {
+                        let data = this.state.data;
+                        let x = data.find(i => i.token === token.name);
 
-                                x.account = account.get("name");
-                                x.balance = {amount, asset};
-                                this.setState({data});
-                            });
-                        });
+                        let amount = BigNumber(balance.get("balance")).shiftedBy(-coreToken.precision);
+                        let asset = coreToken.symbol;
 
-                        FetchChain("getObject", asset.get("dynamic_asset_data_id")).then(dynAssetData => {
-                            let data = this.state.data;
-                            let x = data.find(i => i.token === token.name);
-                            x.supply = {
-                                amount: BigNumber(dynAssetData.get("current_supply")).shiftedBy(-asset.get("precision")),
-                                asset: asset.get("symbol")
-                            };
-                            x.accumulatedFees = {
-                                amount: BigNumber(dynAssetData.get("accumulated_fees")).shiftedBy(-asset.get("precision")),
-                                asset: asset.get("symbol")
-                            };
-                            x.feePool = {
-                                amount: BigNumber(dynAssetData.get("fee_pool")).shiftedBy(-coreToken.precision),
-                                asset: coreToken.symbol
-                            };
-
-                            // minamount
-                            x.minAmount = {
-                                amount: BigNumber(token.minAmount).shiftedBy(-asset.get("precision")),
-                                asset: asset.get("symbol")
-                            };
-                            this.setState({data});
-                        });
+                        x.account = account.get("name");
+                        x.balance = {amount, asset};
+                        this.setState({data});
                     });
+                });
+
+                FetchChain("getObject", asset.get("dynamic_asset_data_id")).then(dynAssetData => {
+                    let data = this.state.data;
+                    let x = data.find(i => i.token === token.name);
+                    x.supply = {
+                        amount: BigNumber(dynAssetData.get("current_supply")).shiftedBy(-asset.get("precision")),
+                        asset: asset.get("symbol")
+                    };
+                    x.accumulatedFees = {
+                        amount: BigNumber(dynAssetData.get("accumulated_fees")).shiftedBy(-asset.get("precision")),
+                        asset: asset.get("symbol")
+                    };
+                    x.feePool = {
+                        amount: BigNumber(dynAssetData.get("fee_pool")).shiftedBy(-coreToken.precision),
+                        asset: coreToken.symbol
+                    };
+
+                    // minamount
+                    x.minAmount = {
+                        amount: BigNumber(token.minAmount).shiftedBy(-asset.get("precision")),
+                        asset: asset.get("symbol")
+                    };
+                    this.setState({data});
                 });
             });
         });
@@ -159,7 +225,7 @@ class Balances extends Component {
 
     render() {
 
-        const {data, prices, loading} = this.state;
+        const {data, prices, loading, data2} = this.state;
 
         const columns = [
             {
@@ -263,7 +329,7 @@ class Balances extends Component {
                             price = BigNumber(price).multipliedBy(val.amount);
 
                             let priceClassName = null;
-                            if (price.isGreaterThanOrEqualTo(okAccAmount)) priceClassName = "success";
+                            if (price.isGreaterThanOrEqualTo(okAccumulatedFees)) priceClassName = "success";
 
                             priceLabel = <span className={priceClassName}><small>(${price.toFixed(0)})</small></span>;
                         } else {
@@ -305,14 +371,62 @@ class Balances extends Component {
             },
         ];
 
+        const columns2 = [
+            {
+                title: 'Account',
+                dataIndex: 'account',
+                key: 'account',
+                render: (val, record, index) => {
+                    if (val) {
+                        return <a href={`https://market.rudex.org/#/account/${val}`} target="_blank"
+                                  rel="noopener noreferrer">
+                            {val}
+                        </a>;
+                    }
+                }
+            }, {
+                title: 'Balance',
+                dataIndex: 'balance',
+                key: 'balance',
+                render: (val, record, index) => {
+                    if (val) {
+                        let className = null;
+                        if (record.min) {
+                            let min = BigNumber(record.min);
+                            if (val.amount.isLessThan(min)) className = "warn";
+                        }
+
+
+                        return <span className={className}>
+                            <Asset
+                                amount={val.amount}
+                                asset={val.asset}
+                            />
+                        </span>;
+                    }
+                }
+            }
+        ];
+
         return (
-            <Table
-                dataSource={data}
-                columns={columns}
-                pagination={false}
-                loading={loading}
-                size="small"
-            />
+            <div>
+                <h1>Gateways</h1>
+                <Table
+                    dataSource={data}
+                    columns={columns}
+                    pagination={false}
+                    loading={loading}
+                    size="small"
+                />
+                <h1>Monitoring</h1>
+                <Table
+                    dataSource={data2}
+                    columns={columns2}
+                    pagination={false}
+                    loading={loading}
+                    size="small"
+                />
+            </div>
         );
     }
 }
